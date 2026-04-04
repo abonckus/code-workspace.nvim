@@ -30,7 +30,8 @@ function M.setup(opts)
     -- Snacks integration (priority); fall back to neo-tree
     local snacks_enabled = cfg.integrations.snacks
     if snacks_enabled == nil then
-        snacks_enabled = pcall(require, "snacks")
+        local ok = pcall(require, "snacks")
+        snacks_enabled = ok and _G.Snacks ~= nil and _G.Snacks.picker ~= nil
     end
     if snacks_enabled then
         local ok, int = pcall(require, "code-workspace.integrations.snacks")
