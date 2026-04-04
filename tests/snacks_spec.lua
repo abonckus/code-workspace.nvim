@@ -130,3 +130,174 @@ describe("integrations/snacks/init", function()
         end)
     end)
 end)
+
+describe("integrations/snacks/source", function()
+    local source
+    local tree_calls   -- { refresh = [...], get = [...] }
+    local yielded      -- items collected by calling the finder's return function
+
+    local function make_node(path, opts)
+        opts = opts or {}
+        return {
+            path       = path,
+            name       = vim.fs.basename(path),
+            dir        = opts.dir,
+            open       = opts.open,
+            hidden     = opts.hidden or false,
+            ignored    = opts.ignored or false,
+            status     = opts.status,
+            dir_status = opts.dir_status,
+            type       = opts.dir and "directory" or "file",
+            severity   = opts.severity,
+            parent     = opts.parent,
+        }
+    end
+
+    before_each(function()
+        package.loaded["code-workspace.integrations.snacks.source"] = nil
+        tree_calls = { refresh = {}, get = {} }
+        yielded    = {}
+
+        -- Mock Tree singleton
+        package.loaded["snacks.explorer.tree"] = {
+            refresh = function(self, path)
+                table.insert(tree_calls.refresh, path)
+            end,
+            get = function(self, cwd, cb, filter_opts)
+                table.insert(tree_calls.get, { cwd = cwd, filter_opts = filter_opts })
+                tree_calls.get[#tree_calls.get].push = cb
+            end,
+            in_cwd = function(self, cwd, path)
+                return path:find(cwd, 1, true) == 1
+            end,
+        }
+
+        -- Mock Actions
+        package.loaded["snacks.explorer.actions"] = {
+            actions = {},
+            update  = function() end,
+        }
+
+        source = require("code-workspace.integrations.snacks.source")
+    end)
+
+    after_each(function()
+        package.loaded["code-workspace.integrations.snacks.source"] = nil
+        package.loaded["snacks.explorer.tree"] = nil
+        package.loaded["snacks.explorer.actions"] = nil
+    end)
+
+    local function run_finder(roots, nodes_per_root)
+        -- nodes_per_root: list of lists of nodes, one list per root.
+        -- Replaces Tree.get on the already-captured mock object so source.lua
+        -- sees the updated implementation (Tree is captured by reference at load time).
+        local call_index = 0
+        package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb, filter_opts)
+            call_index = call_index + 1
+            table.insert(tree_calls.get, { cwd = cwd })
+            for _, node in ipairs(nodes_per_root[call_index] or {}) do
+                cb(node)
+            end
+        end
+
+        local ctx = { picker = {} }
+        local gen = source.finder({ roots = roots }, ctx)
+        gen(function(item) table.insert(yielded, item) end)
+    end
+
+    it("yields items from all roots in order", function()
+        local virtual_root = { path = "" }
+        local node_a = make_node("/a", { dir = true, parent = virtual_root })
+        local node_b = make_node("/b", { dir = true, parent = virtual_root })
+
+        run_finder(
+            { { name = "a", path = "/a" }, { name = "b", path = "/b" } },
+            { { node_a }, { node_b } }
+        )
+
+        assert.equals(2, #yielded)
+        assert.equals("/a", yielded[1].file)
+        assert.equals("/b", yielded[2].file)
+    end)
+
+    it("sets last=false on all root nodes except the final one", function()
+        local virtual_root = { path = "" }
+        local node_a = make_node("/a", { dir = true, parent = virtual_root })
+        local node_b = make_node("/b", { dir = true, parent = virtual_root })
+        local node_c = make_node("/c", { dir = true, parent = virtual_root })
+
+        run_finder(
+            {
+                { name = "a", path = "/a" },
+                { name = "b", path = "/b" },
+                { name = "c", path = "/c" },
+            },
+            { { node_a }, { node_b }, { node_c } }
+        )
+
+        assert.is_false(yielded[1].last)  -- /a: not last
+        assert.is_false(yielded[2].last)  -- /b: not last
+        assert.is_true(yielded[3].last)   -- /c: last root
+    end)
+
+    it("sets last correctly within a root subtree", function()
+        local virtual_root = { path = "" }
+        local root_node = make_node("/r", { dir = true, parent = virtual_root })
+        local child_1   = make_node("/r/x", { dir = false, parent = root_node })
+        local child_2   = make_node("/r/y", { dir = false, parent = root_node })
+
+        run_finder(
+            { { name = "r", path = "/r" } },
+            { { root_node, child_1, child_2 } }
+        )
+
+        assert.is_true(yielded[1].last)   -- root is last (only root)
+        assert.is_false(yielded[2].last)  -- child_1 not last (child_2 follows)
+        assert.is_true(yielded[3].last)   -- child_2 is last child of root_node
+    end)
+
+    it("sets parent to nil for root nodes", function()
+        local virtual_root = { path = "" }
+        local node_a = make_node("/a", { dir = true, parent = virtual_root })
+
+        run_finder(
+            { { name = "a", path = "/a" } },
+            { { node_a } }
+        )
+
+        -- root nodes have parent = nil (virtual_root has path "", items[""] is nil)
+        assert.is_nil(yielded[1].parent)
+    end)
+
+    it("sets parent correctly for children", function()
+        local virtual_root = { path = "" }
+        local root_node = make_node("/r", { dir = true, parent = virtual_root })
+        local child     = make_node("/r/x", { parent = root_node })
+
+        run_finder(
+            { { name = "r", path = "/r" } },
+            { { root_node, child } }
+        )
+
+        -- child's parent item is the root item
+        assert.equals(yielded[1], yielded[2].parent)
+    end)
+
+    it("root nodes are never hidden or ignored", function()
+        local virtual_root = { path = "" }
+        local node = make_node("/a", { dir = true, parent = virtual_root, hidden = true, ignored = true })
+
+        run_finder(
+            { { name = "a", path = "/a" } },
+            { { node } }
+        )
+
+        assert.is_false(yielded[1].hidden)
+        assert.is_false(yielded[1].ignored)
+    end)
+
+    it("yields nothing when roots is empty", function()
+        run_finder({}, {})
+        assert.equals(0, #yielded)
+    end)
+end)
