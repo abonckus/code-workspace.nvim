@@ -5,6 +5,7 @@ M.defaults = {
     detect_on_buf_read = true,
     scan_depth         = 1,
     integrations       = {
+        snacks   = nil,
         neo_tree = nil,
     },
     on_load  = nil,

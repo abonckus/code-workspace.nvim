@@ -28,6 +28,16 @@ describe("config.resolve", function()
         assert.is_true(c.integrations.neo_tree)
     end)
 
+    it("includes snacks integration default as nil", function()
+        local c = config.resolve()
+        assert.is_nil(c.integrations.snacks)
+    end)
+
+    it("merges snacks integration option", function()
+        local c = config.resolve({ integrations = { snacks = false } })
+        assert.is_false(c.integrations.snacks)
+    end)
+
     it("does not mutate defaults when user options provided", function()
         config.resolve({ detect_on_startup = false })
         local c2 = config.resolve()
