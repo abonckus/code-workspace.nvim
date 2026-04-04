@@ -27,15 +27,26 @@ function M.setup(opts)
         end,
     })
 
-    -- Neo-tree integration
-    local neo_tree_enabled = cfg.integrations.neo_tree
-    if neo_tree_enabled == nil then
-        neo_tree_enabled = pcall(require, "neo-tree")
+    -- Snacks integration (priority); fall back to neo-tree
+    local snacks_enabled = cfg.integrations.snacks
+    if snacks_enabled == nil then
+        snacks_enabled = pcall(require, "snacks")
     end
-    if neo_tree_enabled then
-        local ok, integration = pcall(require, "code-workspace.integrations.neo-tree")
+    if snacks_enabled then
+        local ok, int = pcall(require, "code-workspace.integrations.snacks")
         if ok then
-            integration.setup()
+            int.setup()
+        end
+    else
+        local neo_tree_enabled = cfg.integrations.neo_tree
+        if neo_tree_enabled == nil then
+            neo_tree_enabled = pcall(require, "neo-tree")
+        end
+        if neo_tree_enabled then
+            local ok, int = pcall(require, "code-workspace.integrations.neo-tree")
+            if ok then
+                int.setup()
+            end
         end
     end
 
