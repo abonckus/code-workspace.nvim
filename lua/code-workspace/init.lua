@@ -87,4 +87,13 @@ function M.active()
     return require("code-workspace.loader").active()
 end
 
+function M.explorer()
+    local ws = require("code-workspace.loader").active()
+    if not ws then return end
+    vim.api.nvim_exec_autocmds("User", {
+        pattern = "WorkspaceLoaded",
+        data    = ws,
+    })
+end
+
 return M
