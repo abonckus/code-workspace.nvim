@@ -67,7 +67,7 @@ function M.setup(cfg)
             if opts.fargs[2] then
                 load_file(opts.fargs[2])
             else
-                local files = vim.fn.glob("**/*.code-workspace", false, true)
+                local files = M._scan(vim.fn.getcwd(), cfg.scan_depth)
                 if #files == 0 then
                     vim.notify("[code-workspace] no .code-workspace files found", vim.log.levels.WARN)
                     return
