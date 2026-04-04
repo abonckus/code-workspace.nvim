@@ -4,4 +4,19 @@ describe("smoke", function()
             require("code-workspace")
         end)
     end)
+
+    it("exposes setup, load, close, active", function()
+        local m = require("code-workspace")
+        assert.is_function(m.setup)
+        assert.is_function(m.load)
+        assert.is_function(m.close)
+        assert.is_function(m.active)
+    end)
+
+    it("active() returns nil before any workspace is loaded", function()
+        package.loaded["code-workspace.loader"] = nil
+        package.loaded["code-workspace"] = nil
+        local m = require("code-workspace")
+        assert.is_nil(m.active())
+    end)
 end)
