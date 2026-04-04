@@ -1,0 +1,7 @@
+describe("smoke", function()
+    it("loads code-workspace without error", function()
+        assert.has_no.errors(function()
+            require("code-workspace")
+        end)
+    end)
+end)

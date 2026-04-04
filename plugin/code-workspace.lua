@@ -1,0 +1,1 @@
+-- Entry point loaded by Neovim on startup
