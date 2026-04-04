@@ -5,13 +5,120 @@ local M = {}
 local _state = setmetatable({}, { __mode = "k" })
 
 ---@class snacks.workspace.State
+---@field on_find? fun()
 local State = {}
 State.__index = State
 
 ---@param picker table
----@param opts table
+---@param opts {roots:{name:string,path:string}[], git_status?:boolean, git_untracked?:boolean, diagnostics?:boolean, watch?:boolean, follow_file?:boolean}
 function State.new(picker, opts)
     local self = setmetatable({}, State)
+    local roots = opts.roots or {}
+
+    local function ref()
+        return not picker.closed and picker or nil
+    end
+
+    local function re_find()
+        local p = ref()
+        if p then
+            p.list:set_target()
+            p:find()
+        end
+    end
+
+    -- Git status: one watcher per root
+    if opts.git_status then
+        for _, folder in ipairs(roots) do
+            require("snacks.explorer.git").update(folder.path, {
+                untracked = opts.git_untracked,
+                on_update = re_find,
+            })
+        end
+    end
+
+    -- Diagnostics: global DiagnosticChanged, debounced, update all roots
+    if opts.diagnostics then
+        local dirty = false
+        local diag_update = Snacks.util.debounce(function()
+            dirty = false
+            local p = ref()
+            if p then
+                local changed = false
+                for _, folder in ipairs(roots) do
+                    if require("snacks.explorer.diagnostics").update(folder.path) then
+                        changed = true
+                    end
+                end
+                if changed then
+                    re_find()
+                end
+            end
+        end, { ms = 200 })
+
+        picker.list.win:on({ "InsertLeave", "DiagnosticChanged" }, function(_, ev)
+            dirty = dirty or ev.event == "DiagnosticChanged"
+            if vim.fn.mode() == "n" and dirty then
+                diag_update()
+            end
+        end)
+    end
+
+    -- File watch: global watcher, refresh tree on write
+    if opts.watch then
+        require("snacks.explorer.watch").watch()
+        picker.list.win:on("BufWritePost", function(_, ev)
+            local p = ref()
+            if p then
+                Tree:refresh(ev.file)
+                Actions.update(p)
+            end
+        end)
+    end
+
+    -- Follow file: on BufEnter, check all roots and scroll list to current file
+    if opts.follow_file then
+        local buf_file = vim.fs.normalize(
+            vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(picker.main))
+        )
+
+        picker.list.win:on({ "WinEnter", "BufEnter" }, function(_, ev)
+            vim.schedule(function()
+                if ev.buf ~= vim.api.nvim_get_current_buf() then
+                    return
+                end
+                local p = ref()
+                if not p or p:is_focused() or not p:on_current_tab() or p.closed then
+                    return
+                end
+                local win = vim.api.nvim_get_current_win()
+                if vim.api.nvim_win_get_config(win).relative ~= "" then
+                    return
+                end
+                local file = vim.fs.normalize(vim.api.nvim_buf_get_name(ev.buf))
+                local item = p:current()
+                if item and item.file == file then
+                    return
+                end
+                for _, folder in ipairs(roots) do
+                    if Tree:in_cwd(folder.path, file) then
+                        Actions.update(p, { target = file })
+                        return
+                    end
+                end
+            end)
+        end)
+
+        if buf_file ~= "" then
+            self.on_find = function()
+                local p = ref()
+                if p then
+                    Actions.update(p, { target = buf_file })
+                end
+            end
+        end
+    end
+
     return self
 end
 
