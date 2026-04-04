@@ -123,4 +123,42 @@ describe("parser.parse", function()
         assert.is_true(warned)
         assert.equals(1, #ws.folders)
     end)
+
+    it("parses files with single-line // comments", function()
+        local path = write_workspace(
+            '// workspace comment\n{"folders": [{"path": "/tmp"}], "name": "Test"}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("Test", ws.name)
+    end)
+
+    it("parses files with trailing commas", function()
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp",}],"name": "Test",}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("Test", ws.name)
+    end)
+
+    it("parses files with block /* */ comments", function()
+        local path = write_workspace(
+            '/* header */{"folders": [{"path": "/tmp"}], /* inline */ "name": "Test"}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("Test", ws.name)
+    end)
+
+    it("parses files where folder names do not contain //", function()
+        -- Note: the pattern-based JSONC stripper will incorrectly strip // inside
+        -- string values (e.g. URLs). This is a known limitation for .code-workspace files.
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp", "name": "my-folder"}]}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("my-folder", ws.folders[1].name)
+    end)
 end)

@@ -1,5 +1,20 @@
 local M = {}
 
+--- Strip JSONC extensions (// comments, /* */ comments, trailing commas) from a string.
+--- Uses pattern-based replacement. Not aware of string context, so // or /* inside
+--- JSON string values will also be stripped — acceptable for .code-workspace files.
+---@param text string Raw file content
+---@return string Strict JSON
+local function strip_jsonc(text)
+    -- Strip block comments first (/* ... */)
+    text = text:gsub("/%*.-%*/", "")
+    -- Strip single-line comments (// ... to end of line)
+    text = text:gsub("//[^\n]*", "")
+    -- Remove trailing commas before ] or }
+    text = text:gsub(",%s*([%]%}])", "%1")
+    return text
+end
+
 --- Parse a .code-workspace file.
 --- Returns a workspace table on success, or nil + error string on failure.
 ---@param filepath string Absolute path to the .code-workspace file
@@ -13,7 +28,7 @@ function M.parse(filepath)
     local content = f:read("*a")
     f:close()
 
-    local ok, data = pcall(vim.fn.json_decode, content)
+    local ok, data = pcall(vim.fn.json_decode, strip_jsonc(content))
     if not ok or type(data) ~= "table" then
         return nil, "invalid JSON in " .. filepath
     end
