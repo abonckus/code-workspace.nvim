@@ -57,7 +57,19 @@ function M.setup(cfg)
     if cfg.detect_on_buf_read then
         vim.api.nvim_create_autocmd("BufRead", {
             pattern  = "*.code-workspace",
-            callback = function(ev) load_file(ev.file) end,
+            callback = function(ev)
+                local workspace, err = parser.parse(ev.file)
+                if not workspace then
+                    vim.notify("[code-workspace] " .. err, vim.log.levels.ERROR)
+                    return
+                end
+                loader.load(workspace)
+                vim.schedule(function()
+                    if vim.api.nvim_buf_is_valid(ev.buf) then
+                        vim.api.nvim_buf_delete(ev.buf, { force = true })
+                    end
+                end)
+            end,
         })
     end
 
