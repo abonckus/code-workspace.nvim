@@ -153,15 +153,31 @@ describe("integrations/snacks/source", function()
         }
     end
 
+    local mock_find_nodes  -- path → node, controls what Tree:find returns
+
     before_each(function()
         package.loaded["code-workspace.integrations.snacks.source"] = nil
-        tree_calls = { refresh = {}, get = {} }
-        yielded    = {}
+        tree_calls      = { refresh = {}, get = {} }
+        yielded         = {}
+        mock_find_nodes = {}
 
         -- Mock Tree singleton
         package.loaded["snacks.explorer.tree"] = {
             refresh = function(self, path)
                 table.insert(tree_calls.refresh, path)
+            end,
+            find = function(self, path)
+                if not mock_find_nodes[path] then
+                    mock_find_nodes[path] = {
+                        path   = path,
+                        open   = nil,
+                        dir    = true,
+                        type   = "directory",
+                        hidden = false,
+                        parent = { path = "" },
+                    }
+                end
+                return mock_find_nodes[path]
             end,
             get = function(self, cwd, cb, filter_opts)
                 table.insert(tree_calls.get, { cwd = cwd, filter_opts = filter_opts })
@@ -299,5 +315,86 @@ describe("integrations/snacks/source", function()
     it("yields nothing when roots is empty", function()
         run_finder({}, {})
         assert.equals(0, #yielded)
+    end)
+
+    describe("collapsed roots", function()
+        it("yields only root item when root open=false, skips Tree:get", function()
+            local virtual_root = { path = "" }
+            mock_find_nodes["/a"] = make_node("/a", {
+                dir    = true,
+                open   = false,
+                parent = virtual_root,
+            })
+            local get_called = false
+            package.loaded["snacks.explorer.tree"].get = function()
+                get_called = true
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({ roots = { { name = "a", path = "/a" } } }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            assert.is_false(get_called)
+            assert.equals(1, #yielded)
+            assert.equals("/a", yielded[1].file)
+            assert.is_false(yielded[1].open)
+        end)
+
+        it("calls Tree:get when root open=nil (first visit)", function()
+            local get_called = false
+            package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb)
+                get_called = true
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({ roots = { { name = "a", path = "/a" } } }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            assert.is_true(get_called)
+        end)
+
+        it("calls Tree:get when root open=true", function()
+            local virtual_root = { path = "" }
+            mock_find_nodes["/a"] = make_node("/a", {
+                dir    = true,
+                open   = true,
+                parent = virtual_root,
+            })
+            local get_called = false
+            package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb)
+                get_called = true
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({ roots = { { name = "a", path = "/a" } } }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            assert.is_true(get_called)
+        end)
+
+        it("collapsed root has correct last flags alongside open roots", function()
+            local virtual_root = { path = "" }
+            -- /a is collapsed, /b is open
+            mock_find_nodes["/a"] = make_node("/a", { dir = true, open = false, parent = virtual_root })
+
+            local call_index = 0
+            local node_b = make_node("/b", { dir = true, parent = virtual_root })
+            package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb)
+                call_index = call_index + 1
+                if cwd == "/b" then cb(node_b) end
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({
+                roots = { { name = "a", path = "/a" }, { name = "b", path = "/b" } },
+            }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            assert.equals(2, #yielded)
+            assert.equals("/a", yielded[1].file)
+            assert.is_false(yielded[1].last)  -- /a not last, /b follows
+            assert.equals("/b", yielded[2].file)
+            assert.is_true(yielded[2].last)   -- /b is last root
+        end)
     end)
 end)

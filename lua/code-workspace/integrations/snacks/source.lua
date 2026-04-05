@@ -141,45 +141,57 @@ function M.finder(opts, ctx)
         local items        = {}  -- path → picker item, for parent references
         local last_tracker = {}  -- Tree node → last picker item that is its child
 
+        local function yield_node(node, folder_path)
+            local parent_item = node.parent and items[node.parent.path] or nil
+            local status = node.status
+            if not status and parent_item and parent_item.dir_status then
+                status = parent_item.dir_status
+            end
+
+            local item = {
+                file       = node.path,
+                dir        = node.dir,
+                open       = node.open,
+                dir_status = node.dir_status or (parent_item and parent_item.dir_status),
+                text       = node.path,
+                parent     = parent_item,
+                hidden     = node.hidden,
+                ignored    = node.ignored,
+                status     = (not node.dir or not node.open or opts.git_status_open) and status or nil,
+                last       = true,
+                type       = node.type,
+                severity   = (not node.dir or not node.open or opts.diagnostics_open) and node.severity or nil,
+            }
+
+            -- track last child per parent node (shared across roots handles inter-root boundary)
+            if last_tracker[node.parent] then
+                last_tracker[node.parent].last = false
+            end
+            last_tracker[node.parent] = item
+
+            -- root node: always visible regardless of hidden/ignored filters
+            if node.path == folder_path then
+                item.hidden  = false
+                item.ignored = false
+            end
+
+            items[node.path] = item
+            cb(item)
+        end
+
         for _, folder in ipairs(roots) do
             Tree:refresh(folder.path)
-            Tree:get(folder.path, function(node)
-                local parent_item = node.parent and items[node.parent.path] or nil
-                local status = node.status
-                if not status and parent_item and parent_item.dir_status then
-                    status = parent_item.dir_status
-                end
+            local root_node = Tree:find(folder.path)
 
-                local item = {
-                    file       = node.path,
-                    dir        = node.dir,
-                    open       = node.open,
-                    dir_status = node.dir_status or (parent_item and parent_item.dir_status),
-                    text       = node.path,
-                    parent     = parent_item,
-                    hidden     = node.hidden,
-                    ignored    = node.ignored,
-                    status     = (not node.dir or not node.open or opts.git_status_open) and status or nil,
-                    last       = true,
-                    type       = node.type,
-                    severity   = (not node.dir or not node.open or opts.diagnostics_open) and node.severity or nil,
-                }
-
-                -- track last child per parent node (shared across roots handles inter-root boundary)
-                if last_tracker[node.parent] then
-                    last_tracker[node.parent].last = false
-                end
-                last_tracker[node.parent] = item
-
-                -- root node: always visible regardless of hidden/ignored filters
-                if node.path == folder.path then
-                    item.hidden  = false
-                    item.ignored = false
-                end
-
-                items[node.path] = item
-                cb(item)
-            end, filter_opts)
+            if root_node.open == false then
+                -- Root explicitly collapsed by user: yield only the root item,
+                -- skipping Tree:get() which would force open=true and show children
+                yield_node(root_node, folder.path)
+            else
+                Tree:get(folder.path, function(node)
+                    yield_node(node, folder.path)
+                end, filter_opts)
+            end
         end
     end
 end
