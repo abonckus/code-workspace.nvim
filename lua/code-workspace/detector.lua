@@ -30,7 +30,31 @@ function M._scan(dir, depth)
     return {}
 end
 
+local function wipe_buf(filepath)
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_get_name(buf) == filepath then
+            vim.schedule(function()
+                if vim.api.nvim_buf_is_valid(buf) then
+                    vim.api.nvim_buf_delete(buf, { force = true })
+                end
+            end)
+            return
+        end
+    end
+end
+
 local function on_startup(cfg)
+    -- Check if a .code-workspace file was given as a command-line argument.
+    -- BufRead fires before VimEnter so detect_on_buf_read cannot catch this case.
+    for i = 0, vim.fn.argc() - 1 do
+        local arg = vim.fn.fnamemodify(vim.fn.argv(i) --[[@as string]], ":p")
+        if arg:match("%.code%-workspace$") and vim.fn.filereadable(arg) == 1 then
+            load_file(arg)
+            wipe_buf(arg)
+            return
+        end
+    end
+
     local files = M._scan(vim.fn.getcwd(), cfg.scan_depth)
     if #files == 0 then
         return
