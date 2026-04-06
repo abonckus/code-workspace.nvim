@@ -1,0 +1,215 @@
+*code-workspace.txt*    Multi-root workspaces via VS Code .code-workspace files
+
+                                                        *code-workspace.nvim*
+
+Open a VS Code `.code-workspace` file in Neovim and get a fully working
+multi-root workspace: all your folders appear in a unified Snacks.explorer
+file tree, LSP knows about every root, and your working directory is set
+automatically.
+
+==============================================================================
+CONTENTS                                               *code-workspace-contents*
+
+  1. Requirements .......................... |code-workspace-requirements|
+  2. Installation .......................... |code-workspace-installation|
+  3. Opening a workspace ................... |code-workspace-opening|
+  4. Browsing files ........................ |code-workspace-explorer|
+  5. Auto-detecting workspaces ............. |code-workspace-autodetect|
+  6. Hooks ................................. |code-workspace-hooks|
+  7. Commands .............................. |code-workspace-commands|
+  8. API ................................... |code-workspace-api|
+
+==============================================================================
+1. REQUIREMENTS                                    *code-workspace-requirements*
+
+  - Neovim 0.10+
+  - snacks.nvim (https://github.com/folke/snacks.nvim)
+
+==============================================================================
+2. INSTALLATION                                    *code-workspace-installation*
+
+With lazy.nvim: >lua
+
+    {
+        "abonckus/code-workspace.nvim",
+        dependencies = { "folke/snacks.nvim" },
+        opts = {},
+    }
+<
+
+No further configuration is required. The plugin works out of the box.
+
+==============================================================================
+3. OPENING A WORKSPACE                                 *code-workspace-opening*
+
+FROM THE TERMINAL ~
+
+Pass the workspace file directly when launching Neovim: >sh
+
+    nvim my-project.code-workspace
+<
+
+The workspace loads automatically, your cwd moves to the workspace directory,
+and all LSP clients are notified about the workspace folders.
+
+FROM INSIDE NEOVIM ~
+
+Use |:Workspace| to scan your current directory and pick a workspace: >
+
+    :Workspace open
+<
+
+Or load a specific file directly: >
+
+    :Workspace open /path/to/my-project.code-workspace
+<
+
+==============================================================================
+4. BROWSING FILES                                     *code-workspace-explorer*
+
+Once a workspace is loaded, open the file explorer with: >lua
+
+    require("code-workspace").explorer()
+<
+
+You'll get a Snacks.explorer sidebar showing all workspace folders as roots.
+The first folder starts expanded; the rest start collapsed — press the expand
+key to open them. Git status, diagnostics, file watching, and keybindings all
+work exactly as you've configured in Snacks.
+
+RECOMMENDED KEYMAP ~
+
+Open the workspace explorer when a workspace is active, fall back to a regular
+Snacks.explorer otherwise: >lua
+
+    vim.keymap.set("n", "<leader>e", function()
+        local cw = require("code-workspace")
+        if cw.active() then
+            cw.explorer()
+        else
+            Snacks.explorer()
+        end
+    end)
+<
+
+When you close a workspace (|:Workspace-close|), the explorer automatically
+switches back to a standard Snacks.explorer at your current directory.
+
+==============================================================================
+5. AUTO-DETECTING WORKSPACES                        *code-workspace-autodetect*
+
+By default the plugin only loads a workspace when you explicitly open one.
+To have Neovim scan the current directory on startup and load automatically,
+set `detect_on_startup = true`: >lua
+
+    opts = {
+        detect_on_startup = true,
+    }
+<
+
+`scan_depth` controls how many parent directories to search (default: `1`,
+meaning cwd and one level up): >lua
+
+    opts = {
+        detect_on_startup = true,
+        scan_depth        = 2,
+    }
+<
+
+Note: `nvim file.code-workspace` always loads the workspace regardless of
+`detect_on_startup`.
+
+==============================================================================
+6. HOOKS                                               *code-workspace-hooks*
+
+Run code whenever a workspace is loaded or closed: >lua
+
+    opts = {
+        on_load = function(workspace)
+            -- workspace.name     — workspace name
+            -- workspace.file     — full path to the .code-workspace file
+            -- workspace.folders  — list of { name, path } tables
+            -- workspace.settings — raw settings table from the workspace file
+            vim.notify("Loaded: " .. workspace.name)
+        end,
+
+        on_close = function(workspace)
+            vim.notify("Closed: " .. workspace.name)
+        end,
+    }
+<
+
+USER AUTOCMDS ~
+
+You can also listen to workspace events with autocommands: >lua
+
+    vim.api.nvim_create_autocmd("User", {
+        pattern  = "WorkspaceLoaded",
+        callback = function(ev)
+            local workspace = ev.data
+        end,
+    })
+
+    vim.api.nvim_create_autocmd("User", {
+        pattern  = "WorkspaceClosed",
+        callback = function(ev)
+            -- ev.data.file
+        end,
+    })
+<
+
+==============================================================================
+7. COMMANDS                                           *code-workspace-commands*
+
+                                                               *:Workspace*
+:Workspace open [file]      Load a workspace. If no file is given, scans the
+                            current directory and shows a picker.
+
+                                                         *:Workspace-close*
+:Workspace close            Unload the current workspace and restore the
+                            previous working directory.
+
+                                                        *:Workspace-status*
+:Workspace status           Show the active workspace name and folder count.
+
+==============================================================================
+8. API                                                     *code-workspace-api*
+
+                                                    *code-workspace.setup()*
+`require("code-workspace").setup({opts})`
+    Configure and initialise the plugin. Called automatically if you use
+    `opts` in lazy.nvim. Available options:
+
+    • `detect_on_startup` (boolean, default: `false`)
+      Scan cwd on startup and load a workspace automatically.
+
+    • `detect_on_buf_read` (boolean, default: `true`)
+      Load a workspace when a `.code-workspace` file is opened in a buffer.
+
+    • `scan_depth` (number, default: `1`)
+      How many parent directories to include in the startup scan.
+
+    • `on_load` (function)
+      Called with the workspace table after a workspace is loaded.
+
+    • `on_close` (function)
+      Called with the workspace table after a workspace is closed.
+
+                                                     *code-workspace.load()*
+`require("code-workspace").load({filepath})`
+    Load a workspace file programmatically.
+
+                                                    *code-workspace.close()*
+`require("code-workspace").close()`
+    Unload the current workspace.
+
+                                                   *code-workspace.active()*
+`require("code-workspace").active()`
+    Returns the active workspace table, or `nil` if none is loaded.
+
+                                                 *code-workspace.explorer()*
+`require("code-workspace").explorer()`
+    Open the workspace explorer. No-op if no workspace is active.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

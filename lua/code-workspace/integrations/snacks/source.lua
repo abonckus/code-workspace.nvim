@@ -179,13 +179,15 @@ function M.finder(opts, ctx)
             cb(item)
         end
 
-        for _, folder in ipairs(roots) do
+        for i, folder in ipairs(roots) do
             Tree:refresh(folder.path)
             local root_node = Tree:find(folder.path)
 
-            if root_node.open == false then
-                -- Root explicitly collapsed by user: yield only the root item,
-                -- skipping Tree:get() which would force open=true and show children
+            -- Collapse when: explicitly collapsed by user (open == false),
+            -- OR it's a non-first root that has never been opened (open == nil).
+            -- Tree:get() forces open=true, so we skip it to keep collapsed state.
+            local collapsed = root_node.open == false or (i > 1 and root_node.open == nil)
+            if collapsed then
                 yield_node(root_node, folder.path)
             else
                 Tree:get(folder.path, function(node)

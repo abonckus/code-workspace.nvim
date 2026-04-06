@@ -1,5 +1,7 @@
 local M = {}
 
+local _snacks = nil  -- snacks integration, set during setup
+
 function M.setup(opts)
     vim.g.code_workspace_setup_called = true
 
@@ -27,28 +29,10 @@ function M.setup(opts)
         end,
     })
 
-    -- Snacks integration (priority); fall back to neo-tree
-    local snacks_enabled = cfg.integrations.snacks
-    if snacks_enabled == nil then
-        local ok = pcall(require, "snacks")
-        snacks_enabled = ok and _G.Snacks ~= nil and _G.Snacks.picker ~= nil
-    end
-    if snacks_enabled then
-        local ok, int = pcall(require, "code-workspace.integrations.snacks")
-        if ok then
-            int.setup()
-        end
-    else
-        local neo_tree_enabled = cfg.integrations.neo_tree
-        if neo_tree_enabled == nil then
-            neo_tree_enabled = pcall(require, "neo-tree")
-        end
-        if neo_tree_enabled then
-            local ok, int = pcall(require, "code-workspace.integrations.neo-tree")
-            if ok then
-                int.setup()
-            end
-        end
+    local ok, int = pcall(require, "code-workspace.integrations.snacks")
+    if ok then
+        int.setup()
+        _snacks = int
     end
 
     -- User hooks
@@ -90,10 +74,9 @@ end
 function M.explorer()
     local ws = require("code-workspace.loader").active()
     if not ws then return end
-    vim.api.nvim_exec_autocmds("User", {
-        pattern = "WorkspaceLoaded",
-        data    = ws,
-    })
+    if _snacks then
+        _snacks.open(ws)
+    end
 end
 
 return M

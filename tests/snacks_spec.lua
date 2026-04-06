@@ -56,11 +56,9 @@ describe("integrations/snacks/init", function()
         vim.api.nvim_clear_autocmds({ event = "User", pattern = "WorkspaceClosed" })
     end)
 
-    describe("WorkspaceLoaded", function()
+    describe("open()", function()
         it("calls Snacks.picker.pick with source workspace_explorer", function()
-            fire("WorkspaceLoaded", {
-                folders = { { name = "app", path = "/srv/app" } },
-            })
+            integration.open({ folders = { { name = "app", path = "/srv/app" } } })
 
             assert.equals(1, #pick_calls)
             assert.equals("workspace_explorer", pick_calls[1].source)
@@ -71,15 +69,13 @@ describe("integrations/snacks/init", function()
                 { name = "app", path = "/srv/app" },
                 { name = "lib", path = "/srv/lib" },
             }
-            fire("WorkspaceLoaded", { folders = folders })
+            integration.open({ folders = folders })
 
             assert.same(folders, pick_calls[1].roots)
         end)
 
         it("inherits standard explorer config as base", function()
-            fire("WorkspaceLoaded", {
-                folders = { { name = "app", path = "/srv/app" } },
-            })
+            integration.open({ folders = { { name = "app", path = "/srv/app" } } })
 
             -- layout from Snacks.picker.sources.explorer is present
             assert.same({ preset = "sidebar" }, pick_calls[1].layout)
@@ -87,21 +83,24 @@ describe("integrations/snacks/init", function()
         end)
 
         it("does not mutate Snacks.picker.sources.explorer", function()
-            fire("WorkspaceLoaded", {
-                folders = { { name = "app", path = "/srv/app" } },
-            })
+            integration.open({ folders = { { name = "app", path = "/srv/app" } } })
 
             -- source field must not leak into the original table
             assert.is_nil(Snacks.picker.sources.explorer.source)
         end)
 
         it("does nothing when folders list is empty", function()
-            fire("WorkspaceLoaded", { folders = {} })
+            integration.open({ folders = {} })
             assert.equals(0, #pick_calls)
         end)
 
-        it("does nothing when workspace data is nil", function()
-            fire("WorkspaceLoaded", { data = nil })
+        it("does nothing when workspace is nil", function()
+            integration.open(nil)
+            assert.equals(0, #pick_calls)
+        end)
+
+        it("WorkspaceLoaded does not auto-open the picker", function()
+            fire("WorkspaceLoaded", { folders = { { name = "app", path = "/srv/app" } } })
             assert.equals(0, #pick_calls)
         end)
     end)
@@ -162,6 +161,9 @@ describe("integrations/snacks/source", function()
         mock_find_nodes = {}
 
         -- Mock Tree singleton
+        -- shared_virtual_root ensures default Tree:find nodes share one parent
+        -- reference, so last_tracker works correctly across roots in tests.
+        local shared_virtual_root = { path = "" }
         package.loaded["snacks.explorer.tree"] = {
             refresh = function(self, path)
                 table.insert(tree_calls.refresh, path)
@@ -174,7 +176,7 @@ describe("integrations/snacks/source", function()
                         dir    = true,
                         type   = "directory",
                         hidden = false,
-                        parent = { path = "" },
+                        parent = shared_virtual_root,
                     }
                 end
                 return mock_find_nodes[path]
@@ -241,6 +243,10 @@ describe("integrations/snacks/source", function()
         local node_a = make_node("/a", { dir = true, parent = virtual_root })
         local node_b = make_node("/b", { dir = true, parent = virtual_root })
         local node_c = make_node("/c", { dir = true, parent = virtual_root })
+
+        -- Mark /b and /c open=true so non-first-root default-collapse is overridden.
+        mock_find_nodes["/b"] = make_node("/b", { dir = true, open = true, parent = virtual_root })
+        mock_find_nodes["/c"] = make_node("/c", { dir = true, open = true, parent = virtual_root })
 
         run_finder(
             {
@@ -318,6 +324,51 @@ describe("integrations/snacks/source", function()
     end)
 
     describe("collapsed roots", function()
+        it("collapses non-first roots by default (open=nil)", function()
+            local get_called_for = {}
+            package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb)
+                table.insert(get_called_for, cwd)
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({
+                roots = {
+                    { name = "a", path = "/a" },
+                    { name = "b", path = "/b" },
+                    { name = "c", path = "/c" },
+                },
+            }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            -- Only /a (first root) should trigger Tree:get; /b and /c collapsed by default
+            assert.equals(1, #get_called_for)
+            assert.equals("/a", get_called_for[1])
+            -- /b and /c yielded as collapsed root items
+            assert.equals("/b", yielded[1].file)
+            assert.equals("/c", yielded[2].file)
+        end)
+
+        it("expands non-first root when user has explicitly opened it (open=true)", function()
+            local virtual_root = { path = "" }
+            mock_find_nodes["/b"] = make_node("/b", { dir = true, open = true, parent = virtual_root })
+
+            local get_called_for = {}
+            local node_b = make_node("/b", { dir = true, parent = virtual_root })
+            package.loaded["snacks.explorer.tree"].get = function(self, cwd, cb)
+                table.insert(get_called_for, cwd)
+                if cwd == "/b" then cb(node_b) end
+            end
+
+            local ctx = { picker = {} }
+            local gen = source.finder({
+                roots = { { name = "a", path = "/a" }, { name = "b", path = "/b" } },
+            }, ctx)
+            gen(function(item) table.insert(yielded, item) end)
+
+            -- /b explicitly open=true → Tree:get called for both /a and /b
+            assert.equals(2, #get_called_for)
+        end)
+
         it("yields only root item when root open=false, skips Tree:get", function()
             local virtual_root = { path = "" }
             mock_find_nodes["/a"] = make_node("/a", {
@@ -374,8 +425,10 @@ describe("integrations/snacks/source", function()
 
         it("collapsed root has correct last flags alongside open roots", function()
             local virtual_root = { path = "" }
-            -- /a is collapsed, /b is open
+            -- /a is collapsed, /b is explicitly open
             mock_find_nodes["/a"] = make_node("/a", { dir = true, open = false, parent = virtual_root })
+            -- /b must be open=true so it isn't treated as a default-collapsed non-first root
+            mock_find_nodes["/b"] = make_node("/b", { dir = true, open = true, parent = virtual_root })
 
             local call_index = 0
             local node_b = make_node("/b", { dir = true, parent = virtual_root })

@@ -44,7 +44,7 @@ local function wipe_buf(filepath)
 end
 
 local function on_startup(cfg)
-    -- Check if a .code-workspace file was given as a command-line argument.
+    -- Always check if a .code-workspace file was passed as a command-line argument.
     -- BufRead fires before VimEnter so detect_on_buf_read cannot catch this case.
     for i = 0, vim.fn.argc() - 1 do
         local arg = vim.fn.fnamemodify(vim.fn.argv(i) --[[@as string]], ":p")
@@ -53,6 +53,11 @@ local function on_startup(cfg)
             wipe_buf(arg)
             return
         end
+    end
+
+    -- CWD scan is opt-in via detect_on_startup.
+    if not cfg.detect_on_startup then
+        return
     end
 
     local files = M._scan(vim.fn.getcwd(), cfg.scan_depth)
@@ -71,7 +76,11 @@ local function on_startup(cfg)
 end
 
 function M.setup(cfg)
-    if cfg.detect_on_startup then
+    -- on_startup always runs: it checks argv unconditionally, then optionally
+    -- scans cwd based on cfg.detect_on_startup.
+    if vim.v.vim_did_enter == 1 then
+        on_startup(cfg)
+    else
         vim.api.nvim_create_autocmd("VimEnter", {
             once     = true,
             callback = function() on_startup(cfg) end,
