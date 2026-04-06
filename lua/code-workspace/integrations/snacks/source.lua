@@ -10,7 +10,8 @@ local State = {}
 State.__index = State
 
 ---@param picker table
----@param opts {roots:{name:string,path:string}[], git_status?:boolean, git_untracked?:boolean, diagnostics?:boolean, watch?:boolean, follow_file?:boolean}
+---@param opts {roots:{name:string,path:string}[], git_status?:boolean, git_untracked?:boolean,
+---             diagnostics?:boolean, watch?:boolean, follow_file?:boolean}
 function State.new(picker, opts)
     local self = setmetatable({}, State)
     local roots = opts.roots or {}
@@ -120,7 +121,8 @@ function State.new(picker, opts)
     return self
 end
 
----@param opts {roots: {name:string, path:string}[], hidden?:boolean, ignored?:boolean, exclude?:string[], include?:string[], git_status_open?:boolean, diagnostics_open?:boolean}
+---@param opts {roots: {name:string, path:string}[], hidden?:boolean, ignored?:boolean,
+---             exclude?:string[], include?:string[], git_status_open?:boolean, diagnostics_open?:boolean}
 ---@param ctx table
 function M.finder(opts, ctx)
     local roots = opts.roots or {}
