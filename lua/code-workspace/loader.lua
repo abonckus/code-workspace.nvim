@@ -1,6 +1,6 @@
 local M = {}
 
-local _active   = nil
+local _active = nil
 local _prev_cwd = nil
 
 local function lsp_folder_uris(folders)
@@ -10,14 +10,15 @@ local function lsp_folder_uris(folders)
 end
 
 local function notify_lsp(folders, action)
-    local added   = action == "added"   and lsp_folder_uris(folders) or {}
+    local added = action == "added" and lsp_folder_uris(folders) or {}
     local removed = action == "removed" and lsp_folder_uris(folders) or {}
 
     local params = { event = { added = added, removed = removed } }
 
     for _, client in ipairs(vim.lsp.get_clients()) do
         local caps = client.server_capabilities
-        if caps
+        if
+            caps
             and caps.workspace
             and caps.workspace.workspaceFolders
             and caps.workspace.workspaceFolders.changeNotifications
@@ -33,14 +34,14 @@ function M.load(workspace)
     end
 
     _prev_cwd = vim.fn.getcwd()
-    _active   = workspace
+    _active = workspace
 
     vim.fn.chdir(vim.fn.fnamemodify(workspace.file, ":p:h"))
     notify_lsp(workspace.folders, "added")
 
     vim.api.nvim_exec_autocmds("User", {
         pattern = "WorkspaceLoaded",
-        data    = workspace,
+        data = workspace,
     })
 end
 
@@ -53,7 +54,7 @@ function M.close()
 
     vim.api.nvim_exec_autocmds("User", {
         pattern = "WorkspaceClosed",
-        data    = { file = _active.file },
+        data = { file = _active.file },
     })
 
     if _prev_cwd then

@@ -1,12 +1,12 @@
 local M = {}
 
-local _snacks = nil  -- snacks integration, set during setup
+local _snacks = nil -- snacks integration, set during setup
 
 function M.setup(opts)
     vim.g.code_workspace_setup_called = true
 
-    local cfg      = require("code-workspace.config").resolve(opts)
-    local loader   = require("code-workspace.loader")
+    local cfg = require("code-workspace.config").resolve(opts)
+    local loader = require("code-workspace.loader")
     local detector = require("code-workspace.detector")
 
     -- Notify late-attaching LSP clients about current workspace folders
@@ -38,14 +38,18 @@ function M.setup(opts)
     -- User hooks
     if cfg.on_load then
         vim.api.nvim_create_autocmd("User", {
-            pattern  = "WorkspaceLoaded",
-            callback = function(ev) cfg.on_load(ev.data) end,
+            pattern = "WorkspaceLoaded",
+            callback = function(ev)
+                cfg.on_load(ev.data)
+            end,
         })
     end
     if cfg.on_close then
         vim.api.nvim_create_autocmd("User", {
-            pattern  = "WorkspaceClosed",
-            callback = function(ev) cfg.on_close(ev.data) end,
+            pattern = "WorkspaceClosed",
+            callback = function(ev)
+                cfg.on_close(ev.data)
+            end,
         })
     end
 
@@ -53,8 +57,8 @@ function M.setup(opts)
 end
 
 function M.load(filepath)
-    local parser  = require("code-workspace.parser")
-    local loader  = require("code-workspace.loader")
+    local parser = require("code-workspace.parser")
+    local loader = require("code-workspace.loader")
     local ws, err = parser.parse(filepath)
     if not ws then
         vim.notify("[code-workspace] " .. err, vim.log.levels.ERROR)
@@ -73,7 +77,9 @@ end
 
 function M.explorer()
     local ws = require("code-workspace.loader").active()
-    if not ws then return end
+    if not ws then
+        return
+    end
     if _snacks then
         _snacks.open(ws)
     end

@@ -57,9 +57,9 @@ function M.parse(filepath)
     end
 
     return {
-        file     = abs_file,
-        name     = data.name or vim.fn.fnamemodify(abs_file, ":t:r"),
-        folders  = folders,
+        file = abs_file,
+        name = data.name or vim.fn.fnamemodify(abs_file, ":t:r"),
+        folders = folders,
         settings = data.settings or {},
     }
 end

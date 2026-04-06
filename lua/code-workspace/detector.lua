@@ -82,14 +82,16 @@ function M.setup(cfg)
         on_startup(cfg)
     else
         vim.api.nvim_create_autocmd("VimEnter", {
-            once     = true,
-            callback = function() on_startup(cfg) end,
+            once = true,
+            callback = function()
+                on_startup(cfg)
+            end,
         })
     end
 
     if cfg.detect_on_buf_read then
         vim.api.nvim_create_autocmd("BufRead", {
-            pattern  = "*.code-workspace",
+            pattern = "*.code-workspace",
             callback = function(ev)
                 local workspace, err = parser.parse(ev.file)
                 if not workspace then
@@ -136,8 +138,10 @@ function M.setup(cfg)
             vim.notify("[code-workspace] unknown subcommand: " .. (subcmd or ""), vim.log.levels.ERROR)
         end
     end, {
-        nargs    = "*",
-        complete = function() return { "open", "close", "status" } end,
+        nargs = "*",
+        complete = function()
+            return { "open", "close", "status" }
+        end,
     })
 end
 

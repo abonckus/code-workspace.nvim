@@ -1,10 +1,10 @@
 local M = {}
 
 M.defaults = {
-    detect_on_startup  = false,
+    detect_on_startup = false,
     detect_on_buf_read = true,
-    scan_depth         = 1,
-    on_load  = nil,
+    scan_depth = 1,
+    on_load = nil,
     on_close = nil,
 }
 

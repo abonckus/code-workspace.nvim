@@ -2,7 +2,7 @@ local M = {}
 
 function M.setup()
     vim.api.nvim_create_autocmd("User", {
-        pattern  = "WorkspaceClosed",
+        pattern = "WorkspaceClosed",
         callback = function()
             local pickers = Snacks.picker.get({ source = "workspace_explorer" })
             if pickers[1] then
@@ -17,11 +17,11 @@ function M.open(workspace)
     if not workspace or not workspace.folders or #workspace.folders == 0 then
         return
     end
-    local base   = vim.deepcopy(Snacks.picker.sources.explorer)
+    local base = vim.deepcopy(Snacks.picker.sources.explorer)
     local config = vim.tbl_deep_extend("force", base, {
         source = "workspace_explorer",
         finder = require("code-workspace.integrations.snacks.source").finder,
-        roots  = workspace.folders,
+        roots = workspace.folders,
     })
     Snacks.picker.pick(config)
 end

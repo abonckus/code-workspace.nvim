@@ -1,4 +1,4 @@
-local Tree    = require("snacks.explorer.tree")
+local Tree = require("snacks.explorer.tree")
 local Actions = require("snacks.explorer.actions")
 
 local M = {}
@@ -78,9 +78,7 @@ function State.new(picker, opts)
 
     -- Follow file: on BufEnter, check all roots and scroll list to current file
     if opts.follow_file then
-        local buf_file = vim.fs.normalize(
-            vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(picker.main))
-        )
+        local buf_file = vim.fs.normalize(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(picker.main)))
 
         picker.list.win:on({ "WinEnter", "BufEnter" }, function(_, ev)
             vim.schedule(function()
@@ -127,7 +125,7 @@ end
 function M.finder(opts, ctx)
     local roots = opts.roots or {}
     local filter_opts = {
-        hidden  = opts.hidden,
+        hidden = opts.hidden,
         ignored = opts.ignored,
         exclude = opts.exclude,
         include = opts.include,
@@ -138,8 +136,8 @@ function M.finder(opts, ctx)
     end
 
     return function(cb)
-        local items        = {}  -- path → picker item, for parent references
-        local last_tracker = {}  -- Tree node → last picker item that is its child
+        local items = {} -- path → picker item, for parent references
+        local last_tracker = {} -- Tree node → last picker item that is its child
 
         local function yield_node(node, folder_path)
             local parent_item = node.parent and items[node.parent.path] or nil
@@ -149,18 +147,18 @@ function M.finder(opts, ctx)
             end
 
             local item = {
-                file       = node.path,
-                dir        = node.dir,
-                open       = node.open,
+                file = node.path,
+                dir = node.dir,
+                open = node.open,
                 dir_status = node.dir_status or (parent_item and parent_item.dir_status),
-                text       = node.path,
-                parent     = parent_item,
-                hidden     = node.hidden,
-                ignored    = node.ignored,
-                status     = (not node.dir or not node.open or opts.git_status_open) and status or nil,
-                last       = true,
-                type       = node.type,
-                severity   = (not node.dir or not node.open or opts.diagnostics_open) and node.severity or nil,
+                text = node.path,
+                parent = parent_item,
+                hidden = node.hidden,
+                ignored = node.ignored,
+                status = (not node.dir or not node.open or opts.git_status_open) and status or nil,
+                last = true,
+                type = node.type,
+                severity = (not node.dir or not node.open or opts.diagnostics_open) and node.severity or nil,
             }
 
             -- track last child per parent node (shared across roots handles inter-root boundary)
@@ -171,7 +169,7 @@ function M.finder(opts, ctx)
 
             -- root node: always visible regardless of hidden/ignored filters
             if node.path == folder_path then
-                item.hidden  = false
+                item.hidden = false
                 item.ignored = false
             end
 
