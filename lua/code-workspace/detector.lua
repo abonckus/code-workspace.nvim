@@ -30,6 +30,22 @@ function M._scan(dir, depth)
     return {}
 end
 
+--- Open the Neovim startup/dashboard page after the workspace buffer is wiped.
+--- Tries snacks.dashboard → alpha → dashboard.nvim → mini.starter → enew.
+local function open_start_screen()
+    if pcall(require, "snacks") and require("snacks").dashboard then
+        require("snacks").dashboard.open()
+    elseif pcall(require, "alpha") then
+        require("alpha").start(true)
+    elseif pcall(require, "dashboard") then
+        vim.cmd("Dashboard")
+    elseif pcall(require, "mini.starter") then
+        require("mini.starter").open()
+    else
+        vim.cmd("enew")
+    end
+end
+
 local function wipe_buf(filepath)
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_get_name(buf) == filepath then
@@ -37,6 +53,7 @@ local function wipe_buf(filepath)
                 if vim.api.nvim_buf_is_valid(buf) then
                     vim.api.nvim_buf_delete(buf, { force = true })
                 end
+                open_start_screen()
             end)
             return
         end
@@ -103,6 +120,7 @@ function M.setup(cfg)
                     if vim.api.nvim_buf_is_valid(ev.buf) then
                         vim.api.nvim_buf_delete(ev.buf, { force = true })
                     end
+                    open_start_screen()
                 end)
             end,
         })
