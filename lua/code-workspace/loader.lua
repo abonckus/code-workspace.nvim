@@ -2,6 +2,8 @@ local M = {}
 
 local _active = nil
 local _prev_cwd = nil
+local _prev_title = nil
+local _prev_titlestring = nil
 
 local function lsp_folder_uris(folders)
     return vim.tbl_map(function(f)
@@ -39,6 +41,12 @@ function M.load(workspace)
     vim.fn.chdir(vim.fn.fnamemodify(workspace.file, ":p:h"))
     notify_lsp(workspace.folders, "added")
 
+    -- Indicate the open workspace in the window title, like VS Code's title bar.
+    _prev_title = vim.o.title
+    _prev_titlestring = vim.o.titlestring
+    vim.o.title = true
+    vim.o.titlestring = workspace.name .. " (Workspace)"
+
     vim.api.nvim_exec_autocmds("User", {
         pattern = "WorkspaceLoaded",
         data = workspace,
@@ -61,6 +69,11 @@ function M.close()
         vim.fn.chdir(_prev_cwd)
         _prev_cwd = nil
     end
+
+    -- Restore the window title captured in load().
+    vim.o.title = _prev_title
+    vim.o.titlestring = _prev_titlestring or ""
+    _prev_title, _prev_titlestring = nil, nil
 
     _active = nil
 end

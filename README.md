@@ -28,7 +28,7 @@ That's it. The plugin works out of the box with no further configuration require
 nvim my-project.code-workspace
 ```
 
-The workspace loads automatically, your cwd moves to the workspace directory, and LSP is notified about all folders.
+The workspace loads automatically, your cwd moves to the workspace directory, and LSP is notified about all folders. The window title becomes `Name (Workspace)` and the workspace explorer opens with all roots — just like opening a workspace in VS Code.
 
 **From inside Neovim** — use the command palette:
 
@@ -44,7 +44,7 @@ This scans your current directory (and parents, per `scan_depth`) for `.code-wor
 
 ## Browsing files
 
-Once a workspace is loaded, open the file explorer with:
+The explorer opens automatically when a workspace loads. To reopen it later (e.g. after closing it), use:
 
 ```lua
 require("code-workspace").explorer()

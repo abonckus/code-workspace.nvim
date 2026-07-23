@@ -60,6 +60,15 @@ describe("loader", function()
             loader.close()
         end)
 
+        it("sets the window title to '<name> (Workspace)'", function()
+            vim.o.titlestring = "before"
+            loader.load(make_workspace({ name = "MyWS" }))
+            assert.is_true(vim.o.title)
+            assert.equals("MyWS (Workspace)", vim.o.titlestring)
+            loader.close()
+            assert.equals("before", vim.o.titlestring)
+        end)
+
         it("closes previous workspace before loading a new one", function()
             local closed = false
             local id = vim.api.nvim_create_autocmd("User", {
