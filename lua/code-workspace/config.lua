@@ -2,7 +2,7 @@ local M = {}
 
 M.defaults = {
     detect_on_startup = false,
-    detect_on_buf_read = true,
+    detect_on_buf_read = false,
     scan_depth = 1,
     on_load = nil,
     on_close = nil,

@@ -190,8 +190,11 @@ You can also listen to workspace events with autocommands: >lua
     • `detect_on_startup` (boolean, default: `false`)
       Scan cwd on startup and load a workspace automatically.
 
-    • `detect_on_buf_read` (boolean, default: `true`)
-      Load a workspace when a `.code-workspace` file is opened in a buffer.
+    • `detect_on_buf_read` (boolean, default: `false`)
+      Load a workspace when a `.code-workspace` file is opened in a buffer
+      after startup. Off by default: opening a `.code-workspace` file after
+      startup just edits it. Workspaces load from the command line (startup)
+      and via `:Workspace open`.
 
     • `scan_depth` (number, default: `1`)
       How many parent directories to include in the startup scan.
