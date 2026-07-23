@@ -63,10 +63,13 @@ local function wipe_buf(filepath)
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_get_name(buf) == filepath then
             vim.schedule(function()
+                -- Landing first so the window moves off the .code-workspace
+                -- buffer; deleting it after (while no window shows it) avoids
+                -- nvim spawning a replacement empty [No Name] buffer.
+                show_landing()
                 if vim.api.nvim_buf_is_valid(buf) then
                     vim.api.nvim_buf_delete(buf, { force = true })
                 end
-                show_landing()
             end)
             return
         end
@@ -130,10 +133,12 @@ function M.setup(cfg)
                 end
                 loader.load(workspace)
                 vim.schedule(function()
+                    -- See wipe_buf: landing first, then delete, to avoid a
+                    -- leftover empty [No Name] buffer.
+                    show_landing()
                     if vim.api.nvim_buf_is_valid(ev.buf) then
                         vim.api.nvim_buf_delete(ev.buf, { force = true })
                     end
-                    show_landing()
                 end)
             end,
         })
