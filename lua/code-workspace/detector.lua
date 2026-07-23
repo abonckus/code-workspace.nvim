@@ -42,14 +42,20 @@ function M._scan_recursive(dir)
     return vim.fn.glob(root .. "/**/*.code-workspace", false, true)
 end
 
---- After the .code-workspace buffer is wiped, surface the loaded workspace by
---- opening the workspace explorer sidebar — mirroring VS Code, which shows the
---- Explorer with all roots when a workspace is opened.
+--- After the .code-workspace buffer is wiped, surface the loaded workspace like
+--- VS Code does when opening a workspace: a start page in the main window (its
+--- Welcome tab) plus the explorer sidebar showing all roots.
 ---
---- Deliberately NOT Snacks.dashboard.open(): called mid-session that renders a
---- full-screen floating dashboard + backdrop that never closes, so files open
---- into the float and the real window layout is corrupted.
-local function show_explorer()
+--- The dashboard is opened into the current window (win = 0), NOT via a plain
+--- Snacks.dashboard.open(): called mid-session that spawns a full-screen
+--- floating dashboard + backdrop that never closes, so files open into the
+--- float and the real window layout is corrupted. Opened before the explorer so
+--- win = 0 lands on the main window rather than the picker.
+local function show_landing()
+    local ok, snacks = pcall(require, "snacks")
+    if ok and snacks.dashboard then
+        snacks.dashboard.open({ win = 0 })
+    end
     require("code-workspace").explorer()
 end
 
@@ -60,7 +66,7 @@ local function wipe_buf(filepath)
                 if vim.api.nvim_buf_is_valid(buf) then
                     vim.api.nvim_buf_delete(buf, { force = true })
                 end
-                show_explorer()
+                show_landing()
             end)
             return
         end
@@ -127,7 +133,7 @@ function M.setup(cfg)
                     if vim.api.nvim_buf_is_valid(ev.buf) then
                         vim.api.nvim_buf_delete(ev.buf, { force = true })
                     end
-                    show_explorer()
+                    show_landing()
                 end)
             end,
         })
