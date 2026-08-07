@@ -23,7 +23,7 @@ function M.setup(opts)
             local uris = vim.tbl_map(function(f)
                 return { uri = vim.uri_from_fname(f.path), name = f.name }
             end, active.folders)
-            client.notify("workspace/didChangeWorkspaceFolders", {
+            client:notify("workspace/didChangeWorkspaceFolders", {
                 event = { added = uris, removed = {} },
             })
         end,
