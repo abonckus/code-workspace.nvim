@@ -59,6 +59,11 @@ Use |:Workspace| to scan your current directory and pick a workspace: >
     :Workspace open
 <
 
+This scans the current directory (and parents, per `scan_depth`) first. If
+nothing is found there, it falls back to a recursive scan of the whole
+project (rooted at the nearest `.git`, or the current directory if none is
+found). A single match loads automatically; multiple matches show a picker.
+
 Or load a specific file directly: >
 
     :Workspace open /path/to/my-project.code-workspace
@@ -163,7 +168,9 @@ You can also listen to workspace events with autocommands: >lua
 
                                                                *:Workspace*
 :Workspace open [file]      Load a workspace. If no file is given, scans the
-                            current directory and shows a picker.
+                            current directory (and parents), falling back to
+                            a recursive project-wide scan; auto-loads a
+                            single match or shows a picker for multiple.
 
                                                          *:Workspace-close*
 :Workspace close            Unload the current workspace and restore the
