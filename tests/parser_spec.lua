@@ -152,13 +152,64 @@ describe("parser.parse", function()
     end)
 
     it("parses files where folder names do not contain //", function()
-        -- Note: the pattern-based JSONC stripper will incorrectly strip // inside
-        -- string values (e.g. URLs). This is a known limitation for .code-workspace files.
         local path = write_workspace(
             '{"folders": [{"path": "/tmp", "name": "my-folder"}]}'
         )
         local ws = parser.parse(path)
         assert.is_not_nil(ws)
         assert.equals("my-folder", ws.folders[1].name)
+    end)
+
+    it("preserves // inside string values instead of treating it as a comment", function()
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp"}], "settings": {"url": "https://example.com/a"}}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("https://example.com/a", ws.settings.url)
+    end)
+
+    it("preserves /* inside string values instead of treating it as a comment start", function()
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp"}], "settings": {"note": "a /* not a comment */ b"}}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("a /* not a comment */ b", ws.settings.note)
+    end)
+
+    it("preserves an escaped quote inside a string without ending the string early", function()
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp"}], "settings": {"note": "say \\"hi\\", then //not-a-comment"}}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals('say "hi", then //not-a-comment', ws.settings.note)
+    end)
+
+    it("still strips a real trailing comma even when a string ending in ,} precedes it", function()
+        local path = write_workspace(
+            '{"folders": [{"path": "/tmp", "name": "literally ,}"},],}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("literally ,}", ws.folders[1].name)
+    end)
+
+    it("still strips real comments and trailing commas alongside string URLs", function()
+        local path = write_workspace(
+            "// header comment\n"
+                .. '{\n'
+                .. '  "folders": [{"path": "/tmp"}],\n'
+                .. '  "settings": {\n'
+                .. '    "trusted": "https://example.com/a", // trailing comment\n'
+                .. '    "codeAnalyzers": ["A", "B",],\n'
+                .. '  },\n'
+                .. '}'
+        )
+        local ws = parser.parse(path)
+        assert.is_not_nil(ws)
+        assert.equals("https://example.com/a", ws.settings.trusted)
+        assert.same({ "A", "B" }, ws.settings.codeAnalyzers)
     end)
 end)
