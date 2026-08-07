@@ -153,12 +153,22 @@ describe("integrations/snacks/source", function()
     end
 
     local mock_find_nodes  -- path → node, controls what Tree:find returns
+    local orig_isdirectory
 
     before_each(function()
         package.loaded["code-workspace.integrations.snacks.source"] = nil
         tree_calls      = { refresh = {}, get = {} }
         yielded         = {}
         mock_find_nodes = {}
+
+        -- source.lua's missing-folder guard checks vim.fn.isdirectory() directly
+        -- (Tree is mocked below and cannot answer that). Tests use fake paths
+        -- like "/a"/"/b"/"/c" that don't exist on disk, so default to
+        -- "exists" here; the missing-folder test overrides this per-path.
+        orig_isdirectory = vim.fn.isdirectory
+        vim.fn.isdirectory = function(_path)
+            return 1
+        end
 
         -- Mock Tree singleton
         -- shared_virtual_root ensures default Tree:find nodes share one parent
@@ -203,6 +213,7 @@ describe("integrations/snacks/source", function()
         package.loaded["code-workspace.integrations.snacks.source"] = nil
         package.loaded["snacks.explorer.tree"] = nil
         package.loaded["snacks.explorer.actions"] = nil
+        vim.fn.isdirectory = orig_isdirectory
     end)
 
     local function run_finder(roots, nodes_per_root)
@@ -321,6 +332,38 @@ describe("integrations/snacks/source", function()
     it("yields nothing when roots is empty", function()
         run_finder({}, {})
         assert.equals(0, #yielded)
+    end)
+
+    it("yields a bare non-expandable root item for a folder missing on disk, without touching Tree", function()
+        vim.fn.isdirectory = function(path)
+            return path == "/missing" and 0 or 1
+        end
+
+        run_finder({ { name = "missing", path = "/missing" } }, { {} })
+
+        assert.equals(1, #yielded)
+        assert.equals("/missing", yielded[1].file)
+        assert.is_true(yielded[1].dir)
+        assert.is_false(yielded[1].open)
+        assert.equals(0, #tree_calls.refresh)
+        assert.equals(0, #tree_calls.get)
+    end)
+
+    it("still yields real roots when a sibling root is missing on disk", function()
+        vim.fn.isdirectory = function(path)
+            return path == "/missing" and 0 or 1
+        end
+        local virtual_root = { path = "" }
+        local node_a = make_node("/a", { dir = true, parent = virtual_root })
+
+        run_finder(
+            { { name = "missing", path = "/missing" }, { name = "a", path = "/a" } },
+            { { node_a } }
+        )
+
+        assert.equals(2, #yielded)
+        assert.equals("/missing", yielded[1].file)
+        assert.equals("/a", yielded[2].file)
     end)
 
     describe("collapsed roots", function()

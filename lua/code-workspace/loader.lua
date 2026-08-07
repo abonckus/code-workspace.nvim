@@ -23,7 +23,7 @@ local function notify_lsp(folders, action)
             and caps.workspace.workspaceFolders
             and caps.workspace.workspaceFolders.changeNotifications
         then
-            client.notify("workspace/didChangeWorkspaceFolders", params)
+            client:notify("workspace/didChangeWorkspaceFolders", params)
         end
     end
 end

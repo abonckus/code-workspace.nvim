@@ -120,7 +120,7 @@ describe("loader", function()
                         workspaceFolders = { changeNotifications = true },
                     },
                 },
-                notify = function(method, params)
+                notify = function(_self, method, params)
                     table.insert(notified, { method = method, params = params })
                 end,
             }
