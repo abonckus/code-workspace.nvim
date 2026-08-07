@@ -21,6 +21,7 @@ function M.open(workspace)
     local config = vim.tbl_deep_extend("force", base, {
         source = "workspace_explorer",
         finder = require("code-workspace.integrations.snacks.source").finder,
+        format = require("code-workspace.integrations.snacks.source").format,
         roots = workspace.folders,
     })
     Snacks.picker.pick(config)
