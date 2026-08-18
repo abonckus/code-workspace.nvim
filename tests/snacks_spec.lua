@@ -153,12 +153,22 @@ describe("integrations/snacks/source", function()
     end
 
     local mock_find_nodes  -- path → node, controls what Tree:find returns
+    local orig_isdirectory
 
     before_each(function()
         package.loaded["code-workspace.integrations.snacks.source"] = nil
         tree_calls      = { refresh = {}, get = {} }
         yielded         = {}
         mock_find_nodes = {}
+
+        -- source.lua's missing-folder guard checks vim.fn.isdirectory() directly
+        -- (Tree is mocked below and cannot answer that). Tests use fake paths
+        -- like "/a"/"/b"/"/c" that don't exist on disk, so default to
+        -- "exists" here; the missing-folder test overrides this per-path.
+        orig_isdirectory = vim.fn.isdirectory
+        vim.fn.isdirectory = function(_path)
+            return 1
+        end
 
         -- Mock Tree singleton
         -- shared_virtual_root ensures default Tree:find nodes share one parent
@@ -203,6 +213,7 @@ describe("integrations/snacks/source", function()
         package.loaded["code-workspace.integrations.snacks.source"] = nil
         package.loaded["snacks.explorer.tree"] = nil
         package.loaded["snacks.explorer.actions"] = nil
+        vim.fn.isdirectory = orig_isdirectory
     end)
 
     local function run_finder(roots, nodes_per_root)
@@ -318,9 +329,71 @@ describe("integrations/snacks/source", function()
         assert.is_false(yielded[1].ignored)
     end)
 
+    it("tags root items with folder.name as root_name", function()
+        local virtual_root = { path = "" }
+        local node = make_node("/a", { dir = true, parent = virtual_root })
+
+        run_finder({ { name = "Base App", path = "/a" } }, { { node } })
+
+        assert.equals("Base App", yielded[1].root_name)
+    end)
+
+    it("does not tag child items with root_name", function()
+        local virtual_root = { path = "" }
+        local root_node = make_node("/r", { dir = true, parent = virtual_root })
+        local child = make_node("/r/x", { parent = root_node })
+
+        run_finder({ { name = "Root", path = "/r" } }, { { root_node, child } })
+
+        assert.equals("Root", yielded[1].root_name)
+        assert.is_nil(yielded[2].root_name)
+    end)
+
+    it("tags a missing-on-disk root item with folder.name as root_name too", function()
+        vim.fn.isdirectory = function(path)
+            return path == "/missing" and 0 or 1
+        end
+
+        run_finder({ { name = "Missing App", path = "/missing" } }, { {} })
+
+        assert.equals("Missing App", yielded[1].root_name)
+    end)
+
     it("yields nothing when roots is empty", function()
         run_finder({}, {})
         assert.equals(0, #yielded)
+    end)
+
+    it("yields a bare non-expandable root item for a folder missing on disk, without touching Tree", function()
+        vim.fn.isdirectory = function(path)
+            return path == "/missing" and 0 or 1
+        end
+
+        run_finder({ { name = "missing", path = "/missing" } }, { {} })
+
+        assert.equals(1, #yielded)
+        assert.equals("/missing", yielded[1].file)
+        assert.is_true(yielded[1].dir)
+        assert.is_false(yielded[1].open)
+        assert.equals(0, #tree_calls.refresh)
+        assert.equals(0, #tree_calls.get)
+    end)
+
+    it("still yields real roots when a sibling root is missing on disk", function()
+        vim.fn.isdirectory = function(path)
+            return path == "/missing" and 0 or 1
+        end
+        local virtual_root = { path = "" }
+        local node_a = make_node("/a", { dir = true, parent = virtual_root })
+
+        run_finder(
+            { { name = "missing", path = "/missing" }, { name = "a", path = "/a" } },
+            { { node_a } }
+        )
+
+        assert.equals(2, #yielded)
+        assert.equals("/missing", yielded[1].file)
+        assert.equals("/a", yielded[2].file)
     end)
 
     describe("collapsed roots", function()
@@ -449,5 +522,73 @@ describe("integrations/snacks/source", function()
             assert.equals("/b", yielded[2].file)
             assert.is_true(yielded[2].last)   -- /b is last root
         end)
+    end)
+end)
+
+describe("integrations/snacks/source M.format", function()
+    local source
+
+    before_each(function()
+        package.loaded["code-workspace.integrations.snacks.source"] = nil
+        package.loaded["snacks.explorer.tree"] = { refresh = function() end, find = function() end, get = function() end }
+        package.loaded["snacks.explorer.actions"] = { actions = {}, update = function() end }
+        source = require("code-workspace.integrations.snacks.source")
+    end)
+
+    after_each(function()
+        package.loaded["code-workspace.integrations.snacks.source"] = nil
+        package.loaded["snacks.explorer.tree"] = nil
+        package.loaded["snacks.explorer.actions"] = nil
+        _G.Snacks = nil
+    end)
+
+    local function stub_default_format(highlights)
+        _G.Snacks = {
+            picker = {
+                format = {
+                    file = function(_item, _picker)
+                        return vim.deepcopy(highlights)
+                    end,
+                },
+            },
+        }
+    end
+
+    it("replaces the field=\"file\" highlight text with root_name for root items", function()
+        stub_default_format({
+            { "", "SnacksPickerIcon", virtual = true },
+            { "app", "SnacksPickerDirectory", field = "file" },
+        })
+
+        local ret = source.format({ file = "/srv/app", root_name = "Base Application" }, {})
+
+        assert.equals("Base Application", ret[2][1])
+        assert.equals("file", ret[2].field)
+    end)
+
+    it("leaves non-root items (no root_name) untouched", function()
+        local highlights = {
+            { "", "SnacksPickerIcon", virtual = true },
+            { "SomeFile.al", "SnacksPickerFile", field = "file" },
+        }
+        stub_default_format(highlights)
+
+        local ret = source.format({ file = "/srv/app/SomeFile.al" }, {})
+
+        assert.equals("SomeFile.al", ret[2][1])
+    end)
+
+    it("only replaces the field=\"file\" entry, leaving other highlight segments alone", function()
+        stub_default_format({
+            { "", "SnacksPickerIcon", virtual = true },
+            { "app", "SnacksPickerDirectory", field = "file" },
+            { " ", virtual = true },
+        })
+
+        local ret = source.format({ file = "/srv/app", root_name = "Base Application" }, {})
+
+        assert.equals("", ret[1][1])
+        assert.equals("Base Application", ret[2][1])
+        assert.equals(" ", ret[3][1])
     end)
 end)
