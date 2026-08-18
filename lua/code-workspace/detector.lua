@@ -30,6 +30,18 @@ function M._scan(dir, depth)
     return {}
 end
 
+--- Recursively find all *.code-workspace files anywhere under a project
+--- root (detected via .git, falling back to dir itself). Used by
+--- ":Workspace open" as a last resort when M._scan (cwd + N parents) finds
+--- nothing -- e.g. a workspace file living in a subdirectory like
+--- apps/Apps.code-workspace rather than the repo root.
+---@param dir string Starting directory
+---@return string[] List of absolute file paths found
+function M._scan_recursive(dir)
+    local root = vim.fs.root(dir, ".git") or dir
+    return vim.fn.glob(root .. "/**/*.code-workspace", false, true)
+end
+
 --- Open the Neovim startup/dashboard page after the workspace buffer is wiped.
 --- Tries snacks.dashboard → alpha → dashboard.nvim → mini.starter → enew.
 local function open_start_screen()
@@ -134,7 +146,17 @@ function M.setup(cfg)
             else
                 local files = M._scan(vim.fn.getcwd(), cfg.scan_depth)
                 if #files == 0 then
+                    -- Nothing found scanning cwd + parents: fall back to a
+                    -- recursive scan of the whole project (e.g. a workspace
+                    -- file living in a subdirectory, not the repo root).
+                    files = M._scan_recursive(vim.fn.getcwd())
+                end
+                if #files == 0 then
                     vim.notify("[code-workspace] no .code-workspace files found", vim.log.levels.WARN)
+                    return
+                end
+                if #files == 1 then
+                    load_file(files[1])
                     return
                 end
                 vim.ui.select(files, { prompt = "Select workspace:" }, function(choice)

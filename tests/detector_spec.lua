@@ -65,3 +65,62 @@ describe("detector._scan", function()
         assert.equals(2, #files)
     end)
 end)
+
+describe("detector._scan_recursive", function()
+    before_each(function()
+        load_calls = {}
+        package.loaded["code-workspace.detector"] = nil
+        detector = require("code-workspace.detector")
+    end)
+
+    it("finds a .code-workspace file nested in a subdirectory", function()
+        local root = vim.fn.tempname()
+        vim.fn.mkdir(root .. "/.git", "p")
+        vim.fn.mkdir(root .. "/apps", "p")
+        io.open(root .. "/apps/Apps.code-workspace", "w"):close()
+
+        local files = detector._scan_recursive(root)
+        assert.equals(1, #files)
+        assert.equals("Apps.code-workspace", vim.fn.fnamemodify(files[1], ":t"))
+    end)
+
+    it("finds files nested several directories deep", function()
+        local root = vim.fn.tempname()
+        vim.fn.mkdir(root .. "/.git", "p")
+        vim.fn.mkdir(root .. "/a/b/c", "p")
+        io.open(root .. "/a/b/c/deep.code-workspace", "w"):close()
+
+        local files = detector._scan_recursive(root)
+        assert.equals(1, #files)
+    end)
+
+    it("returns empty table when nothing found anywhere under the project root", function()
+        local root = vim.fn.tempname()
+        vim.fn.mkdir(root .. "/.git", "p")
+        vim.fn.mkdir(root .. "/apps", "p")
+
+        local files = detector._scan_recursive(root)
+        assert.same({}, files)
+    end)
+
+    it("falls back to the given directory when no .git root is found", function()
+        local dir = vim.fn.tempname()
+        vim.fn.mkdir(dir, "p")
+        io.open(dir .. "/standalone.code-workspace", "w"):close()
+
+        local files = detector._scan_recursive(dir)
+        assert.equals(1, #files)
+    end)
+
+    it("finds multiple nested files across different subdirectories", function()
+        local root = vim.fn.tempname()
+        vim.fn.mkdir(root .. "/.git", "p")
+        vim.fn.mkdir(root .. "/apps", "p")
+        vim.fn.mkdir(root .. "/tools", "p")
+        io.open(root .. "/apps/Apps.code-workspace", "w"):close()
+        io.open(root .. "/tools/Tools.code-workspace", "w"):close()
+
+        local files = detector._scan_recursive(root)
+        assert.equals(2, #files)
+    end)
+end)

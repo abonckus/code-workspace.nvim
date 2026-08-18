@@ -36,7 +36,7 @@ The workspace loads automatically, your cwd moves to the workspace directory, an
 :Workspace open
 ```
 
-This scans your current directory for `.code-workspace` files and lets you pick one. You can also load a specific file directly:
+This scans your current directory (and parents, per `scan_depth`) for `.code-workspace` files. If none are found there, it falls back to a recursive scan of the whole project (rooted at the nearest `.git`, or the current directory if none is found). A single match loads automatically; multiple matches show a picker. You can also load a specific file directly:
 
 ```
 :Workspace open /path/to/my-project.code-workspace
