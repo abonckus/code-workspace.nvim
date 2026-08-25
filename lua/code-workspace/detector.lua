@@ -42,30 +42,34 @@ function M._scan_recursive(dir)
     return vim.fn.glob(root .. "/**/*.code-workspace", false, true)
 end
 
---- Open the Neovim startup/dashboard page after the workspace buffer is wiped.
---- Tries snacks.dashboard → alpha → dashboard.nvim → mini.starter → enew.
-local function open_start_screen()
-    if pcall(require, "snacks") and require("snacks").dashboard then
-        require("snacks").dashboard.open()
-    elseif pcall(require, "alpha") then
-        require("alpha").start(true)
-    elseif pcall(require, "dashboard") then
-        vim.cmd("Dashboard")
-    elseif pcall(require, "mini.starter") then
-        require("mini.starter").open()
-    else
-        vim.cmd("enew")
+--- After the .code-workspace buffer is wiped, surface the loaded workspace like
+--- VS Code does when opening a workspace: a start page in the main window (its
+--- Welcome tab) plus the explorer sidebar showing all roots.
+---
+--- The dashboard is opened into the current window (win = 0), NOT via a plain
+--- Snacks.dashboard.open(): called mid-session that spawns a full-screen
+--- floating dashboard + backdrop that never closes, so files open into the
+--- float and the real window layout is corrupted. Opened before the explorer so
+--- win = 0 lands on the main window rather than the picker.
+local function show_landing()
+    local ok, snacks = pcall(require, "snacks")
+    if ok and snacks.dashboard then
+        snacks.dashboard.open({ win = 0 })
     end
+    require("code-workspace").explorer()
 end
 
 local function wipe_buf(filepath)
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_get_name(buf) == filepath then
             vim.schedule(function()
+                -- Landing first so the window moves off the .code-workspace
+                -- buffer; deleting it after (while no window shows it) avoids
+                -- nvim spawning a replacement empty [No Name] buffer.
+                show_landing()
                 if vim.api.nvim_buf_is_valid(buf) then
                     vim.api.nvim_buf_delete(buf, { force = true })
                 end
-                open_start_screen()
             end)
             return
         end
@@ -129,10 +133,12 @@ function M.setup(cfg)
                 end
                 loader.load(workspace)
                 vim.schedule(function()
+                    -- See wipe_buf: landing first, then delete, to avoid a
+                    -- leftover empty [No Name] buffer.
+                    show_landing()
                     if vim.api.nvim_buf_is_valid(ev.buf) then
                         vim.api.nvim_buf_delete(ev.buf, { force = true })
                     end
-                    open_start_screen()
                 end)
             end,
         })
