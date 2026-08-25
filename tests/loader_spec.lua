@@ -69,6 +69,20 @@ describe("loader", function()
             assert.equals("before", vim.o.titlestring)
         end)
 
+        it("notifies which workspace was loaded", function()
+            local msgs = {}
+            local orig_notify = vim.notify
+            vim.notify = function(msg) table.insert(msgs, msg) end
+            loader.load(make_workspace({
+                name = "CDO",
+                folders = { { name = "a", path = "/tmp" }, { name = "b", path = "/tmp" } },
+            }))
+            vim.notify = orig_notify
+            loader.close()
+            assert.equals(1, #msgs)
+            assert.equals("[code-workspace] loaded CDO (2 folders)", msgs[1])
+        end)
+
         it("closes previous workspace before loading a new one", function()
             local closed = false
             local id = vim.api.nvim_create_autocmd("User", {

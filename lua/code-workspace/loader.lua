@@ -51,6 +51,9 @@ function M.load(workspace)
         pattern = "WorkspaceLoaded",
         data = workspace,
     })
+
+    -- A single match loads without the picker, so tell the user what happened.
+    vim.notify(("[code-workspace] loaded %s (%d folders)"):format(workspace.name, #workspace.folders))
 end
 
 function M.close()
